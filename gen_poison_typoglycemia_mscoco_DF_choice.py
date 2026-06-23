@@ -1,9 +1,15 @@
 import os
 os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
 import argparse
+import re
 import pandas as pd
 import numpy as np
-from mylib.utility import print_args
+try:
+    from mylib.utility import print_args
+except ImportError:
+    def print_args(args):
+        for key, value in vars(args).items():
+            print(f"{key}: {value}")
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -13,22 +19,28 @@ This script generates poisoned text using typoglycemia phenomenon.
 
 DATA_PATH = "C:/Users/okamu/OneDrive/デスクトップ/LAB/研究/dataset/MScoco/train2017_512x512.csv"
 BATCH_SIZE = 32
+DEFAULT_ALLOWED_POS_PREFIXES = ("NN", "VB")
+WORD_TOKEN_RE = re.compile(r"^([^A-Za-z]*)([A-Za-z]+)([^A-Za-z]*)$")
+
 
 class Typoglycemia:
     '''
     add most efficient typoglycemia poisoning to texts in the dataframe.
     '''
-    def __init__(self, seed):
+    def __init__(self, seed, pos_tagger=None, allowed_pos_prefixes=DEFAULT_ALLOWED_POS_PREFIXES):
         # dataframe to store all words in the text, their indices dictionary(text_index, index), DF(Document Frequency), shuffled_word for poisoning
         self.all_words_in_text_dict = pd.DataFrame(columns=["word", "text_index", "DF", "shuffled_word"])
         # pandas dataframe to store original texts and image paths
         self.data_frame = None
+        self.allowed_pos_prefixes = tuple(allowed_pos_prefixes)
+        self.pos_tagger = pos_tagger or self._default_pos_tag
         # set random seed
         import random
         random.seed(seed)
         self.choice = random.choice
         # flag to check if DF scores are calculated
         self.DF_scores_calculated = False
+        self.shuffled_words_generated = False
         print(f"Typoglycemia initialized with seed {seed}")
     
     def load_data_frame(self, data_frame):
@@ -55,40 +67,20 @@ class Typoglycemia:
         return: None, updates self.all_words_in_text_dict
         '''
         # error handling
-        if self.data_frame.empty:
+        if self.data_frame is None or self.data_frame.empty:
             raise ValueError("data_frame is empty, please load data frame first using load_data_frame()")
         if text_column not in self.data_frame.columns:
             raise ValueError(f"text_column '{text_column}' not found in data_frame columns")
 
         # initialize word counts
         self.all_words_in_text_dict = pd.DataFrame(columns=["word", "text_index", "DF", "shuffled_word"])
+        self.DF_scores_calculated = False
+        self.shuffled_words_generated = False
 
         #select one text from the dataframe
         for text_index, text in enumerate(self.data_frame[text_column]):
-            # split text into words and count
-            words = text.split()
-            # check and add each word to the dataframe
-            for index, word in enumerate(words):
-                # remove punctuation from the end of the word
-                if word.endswith('.'):
-                    word = word[:-1]
-                # check if the word is valid
-                word = word.lower()
-                if word.isalpha() and len(word) > 3:
-                    # if the word is not in the dataframe, add it
-                    if not self.all_words_in_text_dict['word'].isin([word]).any():
-                        self.all_words_in_text_dict = pd.concat([self.all_words_in_text_dict, pd.DataFrame({"word": [word], "text_index": [{text_index: [index]}], "DF": [0], "shuffled_word": [word]})], ignore_index=True)
-                    # if the word is already in the dataframe, update its indices and count
-                    else:
-                        # find the row index of the word
-                        row_index = self.all_words_in_text_dict.index[self.all_words_in_text_dict['word'] == word][0]
-                        # update the indices dictionary and count
-                        list_of_indices = self.all_words_in_text_dict.at[row_index, 'text_index'].get(text_index, False)
-                        if list_of_indices is False:
-                            self.all_words_in_text_dict.at[row_index, 'text_index'][text_index] = [index]
-                        else:
-                            list_of_indices.append(index)
-                            self.all_words_in_text_dict.at[row_index, 'text_index'][text_index] = list_of_indices
+            for index, word in self._allowed_word_tokens(text):
+                self._add_word_occurrence(word, text_index, index)
             print(f"Processed text {text_index+1}/{len(self.data_frame)}")
 
     def calculate_DF_scores(self):
@@ -141,7 +133,7 @@ class Typoglycemia:
         #error handling
         if max_changed_words <= 0:
             raise ValueError("max_changed_words must be greater than 0")
-        if self.data_frame.empty:
+        if self.data_frame is None or self.data_frame.empty:
             raise ValueError("data_frame is empty")
         if self.all_words_in_text_dict.empty:
             raise ValueError("all_words_in_text_dict is empty, please run count_words_in_text() first")
@@ -160,41 +152,36 @@ class Typoglycemia:
         # for each text, select words to be changed based on their DF probabilities
         for text_index, row in poisoned_texts_df.iterrows():
             original_text = row[text_column]
-            words = original_text.split()
-            # get words in the text that are in the all_words_in_text_dict
-            words_in_text = []
-            for index, word in enumerate(words):
-                # remove punctuation from the end of the word
-                if word.endswith('.'):
-                    word = word[:-1]
-                word_lower = word.lower()
-                if self.all_words_in_text_dict['word'].isin([word_lower]).any():
-                    words_in_text.append(words[index])
+            tokens = original_text.split()
+            candidate_tokens = []
+            for index, word in self._allowed_word_tokens(original_text):
+                if self.all_words_in_text_dict['word'].isin([word]).any():
+                    candidate_tokens.append((index, word))
             # if there are no words to change, continue to next text
-            if len(words_in_text) == 0:
+            if len(candidate_tokens) == 0:
                 continue
             # get DF probabilities of the words in the text
             df_probs = []
-            for word in words_in_text:
-                word = word.lower()
+            for _, word in candidate_tokens:
                 row_index = self.all_words_in_text_dict.index[self.all_words_in_text_dict['word'] == word][0]
                 df_score = self.all_words_in_text_dict.at[row_index, 'DF']
                 df_probs.append(df_score)
             df_probs = np.array(df_probs) / np.sum(df_probs)
             # select words to be changed based on DF probabilities
-            num_words_to_change = min(max_changed_words, len(words_in_text))
+            num_words_to_change = min(max_changed_words, len(candidate_tokens))
             np.random.seed(0)  # for reproducibility
-            selected_words = np.random.choice(words_in_text, size=num_words_to_change, replace=False, p=df_probs)
+            selected_token_indices = np.random.choice(len(candidate_tokens), size=num_words_to_change, replace=False, p=df_probs)
             # change the selected words in the text
-            for selected_word in selected_words:
+            for selected_token_index in selected_token_indices:
+                selected_word_index, selected_word = candidate_tokens[selected_token_index]
                 # get the shuffled word
-                selected_word_lower = selected_word.lower()
-                row_index = self.all_words_in_text_dict.index[self.all_words_in_text_dict['word'] == selected_word_lower][0]
+                row_index = self.all_words_in_text_dict.index[self.all_words_in_text_dict['word'] == selected_word][0]
                 shuffled_word = self.all_words_in_text_dict.at[row_index, 'shuffled_word']
-                # replace the word in the text and update the poisoned text
-                poisoned_texts_df.at[text_index, text_column] = poisoned_texts_df.at[text_index, text_column].replace(selected_word, shuffled_word)
+                # replace only the selected token and preserve punctuation/case
+                tokens[selected_word_index] = self._replace_token_word(tokens[selected_word_index], shuffled_word)
                 # increment the changed words count
                 poisoned_texts_df.at[text_index, 'changed_words'] += 1
+            poisoned_texts_df.at[text_index, text_column] = ' '.join(tokens)
             # initial letter capitalization check
             poisoned_text = poisoned_texts_df.at[text_index, text_column]
             if original_text[0].isupper():
@@ -208,6 +195,120 @@ class Typoglycemia:
         # drop the changed_words column before returning
         poisoned_texts_df = poisoned_texts_df.drop(columns=['changed_words'])
         return poisoned_texts_df
+
+    def _add_word_occurrence(self, word, text_index, index):
+        # if the word is not in the dataframe, add it
+        if not self.all_words_in_text_dict['word'].isin([word]).any():
+            word_df = pd.DataFrame({"word": [word], "text_index": [{text_index: [index]}], "DF": [0], "shuffled_word": [word]})
+            self.all_words_in_text_dict = pd.concat([self.all_words_in_text_dict, word_df], ignore_index=True)
+            return
+
+        # if the word is already in the dataframe, update its indices and count
+        row_index = self.all_words_in_text_dict.index[self.all_words_in_text_dict['word'] == word][0]
+        list_of_indices = self.all_words_in_text_dict.at[row_index, 'text_index'].get(text_index, False)
+        if list_of_indices is False:
+            self.all_words_in_text_dict.at[row_index, 'text_index'][text_index] = [index]
+        else:
+            list_of_indices.append(index)
+            self.all_words_in_text_dict.at[row_index, 'text_index'][text_index] = list_of_indices
+
+    def _allowed_word_tokens(self, text):
+        '''
+        Return (token_index, normalized_word) for alphabetic nouns and verbs.
+        '''
+        candidate_tokens = []
+        for index, token in enumerate(str(text).split()):
+            word = self._normalize_token(token)
+            if self._is_valid_word(word):
+                candidate_tokens.append((index, word))
+
+        if not candidate_tokens:
+            return []
+
+        tags = list(self.pos_tagger([word for _, word in candidate_tokens]))
+        if len(tags) != len(candidate_tokens):
+            raise ValueError("pos_tagger must return one tag for each input word")
+
+        allowed_tokens = []
+        for (index, word), tag_entry in zip(candidate_tokens, tags):
+            pos_tag = tag_entry[1] if isinstance(tag_entry, (tuple, list)) else tag_entry
+            if self._is_allowed_pos(pos_tag):
+                allowed_tokens.append((index, word))
+        return allowed_tokens
+
+    def _normalize_token(self, token):
+        match = WORD_TOKEN_RE.match(token)
+        if not match:
+            return ""
+        return match.group(2).lower()
+
+    def _replace_token_word(self, token, replacement):
+        match = WORD_TOKEN_RE.match(token)
+        if not match:
+            return token
+
+        prefix, original_word, suffix = match.groups()
+        if original_word.isupper():
+            cased_replacement = replacement.upper()
+        elif original_word[0].isupper():
+            cased_replacement = replacement.capitalize()
+        else:
+            cased_replacement = replacement.lower()
+        return prefix + cased_replacement + suffix
+
+    def _is_valid_word(self, word):
+        return word.isalpha() and len(word) > 3
+
+    def _is_allowed_pos(self, pos_tag):
+        return any(pos_tag.startswith(prefix) for prefix in self.allowed_pos_prefixes)
+
+    def _default_pos_tag(self, words):
+        try:
+            import nltk
+            return nltk.pos_tag(words)
+        except (ImportError, LookupError):
+            return self._heuristic_pos_tag(words)
+
+    def _heuristic_pos_tag(self, words):
+        return [(word, self._guess_pos_tag(word)) for word in words]
+
+    def _guess_pos_tag(self, word):
+        '''
+        Conservative fallback used when no external POS tagger is supplied.
+        A caller can pass an NLTK/spaCy-backed pos_tagger for stricter tagging.
+        '''
+        word = word.lower()
+        non_content_words = {
+            "about", "above", "after", "again", "against", "almost", "along", "among",
+            "around", "because", "before", "behind", "below", "between", "bright",
+            "brown", "could", "every", "first", "from", "into", "large", "little",
+            "other", "quick", "should", "small", "their", "there", "these", "those",
+            "through", "under", "where", "while", "white", "would",
+        }
+        verb_words = {
+            "carry", "carries", "carrying", "catch", "catches", "eating", "holding",
+            "jumps", "jumping", "looks", "looking", "paint", "paints", "painting",
+            "play", "plays", "playing", "ride", "rides", "riding", "runs", "running",
+            "sits", "sitting", "stand", "stands", "standing", "walk", "walks",
+            "walking", "wear", "wears", "wearing",
+        }
+        noun_words = {
+            "airplane", "artist", "beach", "bicycle", "bottle", "bridge", "building",
+            "child", "children", "computer", "field", "horse", "kitchen", "laptop",
+            "man", "murals", "person", "people", "phone", "pizza", "player", "players",
+            "road", "room", "sandwich", "skateboard", "snowboard", "street", "surfboard",
+            "table", "train", "truck", "woman", "women",
+        }
+
+        if word in non_content_words:
+            return "JJ"
+        if word in verb_words or word.endswith(("ing", "ed")):
+            return "VB"
+        if word in noun_words or word.endswith(("tion", "ment", "ness", "ity", "ship", "age", "ance", "ence", "er", "or", "ist", "ism")):
+            return "NN"
+        if word.endswith("s") and not word.endswith(("ous", "less")):
+            return "NNS"
+        return "JJ"
 
     def shuffle_word(self, word):
         '''
