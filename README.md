@@ -6,3 +6,30 @@ The current script only shuffles candidate words tagged as nouns or verbs
 (`NN*` or `VB*` POS tags). `Typoglycemia` accepts a custom `pos_tagger`
 callable for stricter tagging. When none is supplied, it uses NLTK if available
 and otherwise falls back to a conservative built-in tagger.
+
+## Baseline attacks
+
+`poisoning_baselines.py` provides a shared framework for additional poisoning
+baselines:
+
+- `CharmerBaseline`: character-level perturbations with swap, delete, insert,
+  and keyboard-neighbor replacement candidates.
+- `TextFoolerBaseline`: word-level synonym replacement with importance-ranked
+  token selection and pluggable synonym providers.
+
+Both baselines expose `poison_text()` and `poison_dataframe()`:
+
+```python
+from poisoning_baselines import CharmerBaseline, TextFoolerBaseline
+
+charmer = CharmerBaseline(seed=42)
+print(charmer.poison_text("A person rides a bicycle.", max_changed_words=2))
+
+textfooler = TextFoolerBaseline(seed=42)
+poisoned_df = textfooler.poison_dataframe(
+    df,
+    text_column="Caption",
+    image_column="File Path",
+    max_changed_words=2,
+)
+```
