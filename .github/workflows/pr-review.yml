@@ -9,6 +9,7 @@ permissions:
   contents: read
   pull-requests: write
   issues: write
+  actions: read
 
 jobs:
   lint:
@@ -58,22 +59,81 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const failureReasons = [];
             if (context.payload.pull_request == null) {
               core.setFailed('No pull request context found.');
               return;
             }
-            if ('${{ needs.lint.result }}' === 'failure') {
-              failureReasons.push('- Lint job failed');
+
+            const lintResult = '${{ needs.lint.result }}';
+            const testResult = '${{ needs.test.result }}';
+
+            // Fetch job list for this run to get individual job IDs
+            const { data: { jobs } } = await github.rest.actions.listJobsForWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId,
+            });
+
+            async function fetchJobLogs(jobName) {
+              const job = jobs.find(j => j.name === jobName);
+              if (!job) return null;
+              try {
+                const resp = await github.rest.actions.downloadJobLogsForWorkflowRun({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  job_id: job.id,
+                });
+                return typeof resp.data === 'string' ? resp.data : null;
+              } catch {
+                return null;
+              }
             }
-            if ('${{ needs.test.result }}' === 'failure') {
-              failureReasons.push('- Test job failed');
+
+            function extractRelevantLines(logs, maxLines = 50) {
+              if (!logs) return null;
+              // Strip ANSI colour codes
+              const clean = logs.replace(/\x1B\[[0-9;]*[mGKHF]/g, '');
+              const lines = clean.split('\n');
+
+              // Patterns that indicate errors / failures
+              const errorPattern = /error:|warning:|FAILED|FAIL|AssertionError|E\d{3}|W\d{3}|TypeError|SyntaxError|ImportError|ModuleNotFoundError/i;
+              const relevant = lines.filter(l => errorPattern.test(l));
+
+              // Fall back to the last N lines if nothing matched
+              const selected = relevant.length > 0 ? relevant : lines.slice(-maxLines);
+              return selected.slice(0, maxLines).join('\n').trim();
             }
+
+            const sections = [];
+
+            if (lintResult === 'failure') {
+              const logs = await fetchJobLogs('Lint');
+              const details = extractRelevantLines(logs);
+              sections.push([
+                '### ❌ Lint',
+                details
+                  ? `\`\`\`\n${details}\n\`\`\``
+                  : '_ログを取得できませんでした_',
+              ].join('\n'));
+            }
+
+            if (testResult === 'failure') {
+              const logs = await fetchJobLogs('Run Tests');
+              const details = extractRelevantLines(logs);
+              sections.push([
+                '### ❌ テスト',
+                details
+                  ? `\`\`\`\n${details}\n\`\`\``
+                  : '_ログを取得できませんでした_',
+              ].join('\n'));
+            }
+
             const body = [
-              'コードレビューに失敗したため、このPRをクローズします。',
+              '## ❌ コードレビューに失敗したため、このPRをクローズします。',
               '',
-              '失敗理由:',
-              ...failureReasons,
+              '---',
+              '',
+              ...sections,
             ].join('\n');
 
             await github.rest.issues.createComment({
