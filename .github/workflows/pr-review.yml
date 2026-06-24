@@ -15,6 +15,8 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    outputs:
+      lint_output: ${{ steps.flake8.outputs.lint_output }}
     steps:
       - uses: actions/checkout@v4
 
@@ -27,11 +29,23 @@ jobs:
         run: pip install flake8
 
       - name: Run flake8
-        run: flake8 . --max-line-length=120 --exclude=.git
+        id: flake8
+        run: |
+          set +e
+          output=$(flake8 . --max-line-length=120 --exclude=.git 2>&1)
+          exit_code=$?
+          {
+            echo 'lint_output<<ENDOFOUTPUT'
+            echo "$output"
+            echo 'ENDOFOUTPUT'
+          } >> "$GITHUB_OUTPUT"
+          exit $exit_code
 
   test:
     name: Run Tests
     runs-on: ubuntu-latest
+    outputs:
+      test_output: ${{ steps.pytest.outputs.test_output }}
     steps:
       - uses: actions/checkout@v4
 
@@ -47,7 +61,17 @@ jobs:
         run: python -c "import nltk; nltk.download('averaged_perceptron_tagger'); nltk.download('averaged_perceptron_tagger_eng')"
 
       - name: Run tests
-        run: python -m pytest tests/ -v
+        id: pytest
+        run: |
+          set +e
+          output=$(python -m pytest tests/ -v 2>&1)
+          exit_code=$?
+          {
+            echo 'test_output<<ENDOFOUTPUT'
+            echo "$output"
+            echo 'ENDOFOUTPUT'
+          } >> "$GITHUB_OUTPUT"
+          exit $exit_code
 
   close-pr-on-failure:
     name: Comment and Close PR on Failure
@@ -66,65 +90,26 @@ jobs:
 
             const lintResult = '${{ needs.lint.result }}';
             const testResult = '${{ needs.test.result }}';
-
-            // Fetch job list for this run to get individual job IDs
-            const { data: { jobs } } = await github.rest.actions.listJobsForWorkflowRun({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              run_id: context.runId,
-            });
-
-            async function fetchJobLogs(jobName) {
-              const job = jobs.find(j => j.name === jobName);
-              if (!job) return null;
-              try {
-                const resp = await github.rest.actions.downloadJobLogsForWorkflowRun({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  job_id: job.id,
-                });
-                return typeof resp.data === 'string' ? resp.data : null;
-              } catch {
-                return null;
-              }
-            }
-
-            function extractRelevantLines(logs, maxLines = 50) {
-              if (!logs) return null;
-              // Strip ANSI colour codes
-              const clean = logs.replace(/\x1B\[[0-9;]*[mGKHF]/g, '');
-              const lines = clean.split('\n');
-
-              // Patterns that indicate errors / failures
-              const errorPattern = /error:|warning:|FAILED|FAIL|AssertionError|E\d{3}|W\d{3}|TypeError|SyntaxError|ImportError|ModuleNotFoundError/i;
-              const relevant = lines.filter(l => errorPattern.test(l));
-
-              // Fall back to the last N lines if nothing matched
-              const selected = relevant.length > 0 ? relevant : lines.slice(-maxLines);
-              return selected.slice(0, maxLines).join('\n').trim();
-            }
+            const lintOutput = `${{ needs.lint.outputs.lint_output }}`.trim();
+            const testOutput = `${{ needs.test.outputs.test_output }}`.trim();
 
             const sections = [];
 
             if (lintResult === 'failure') {
-              const logs = await fetchJobLogs('Lint');
-              const details = extractRelevantLines(logs);
               sections.push([
-                '### ❌ Lint',
-                details
-                  ? `\`\`\`\n${details}\n\`\`\``
-                  : '_ログを取得できませんでした_',
+                '### ❌ Lint エラー',
+                lintOutput
+                  ? `\`\`\`\n${lintOutput}\n\`\`\``
+                  : '_出力を取得できませんでした_',
               ].join('\n'));
             }
 
             if (testResult === 'failure') {
-              const logs = await fetchJobLogs('Run Tests');
-              const details = extractRelevantLines(logs);
               sections.push([
-                '### ❌ テスト',
-                details
-                  ? `\`\`\`\n${details}\n\`\`\``
-                  : '_ログを取得できませんでした_',
+                '### ❌ テスト エラー',
+                testOutput
+                  ? `\`\`\`\n${testOutput}\n\`\`\``
+                  : '_出力を取得できませんでした_',
               ].join('\n'));
             }
 
