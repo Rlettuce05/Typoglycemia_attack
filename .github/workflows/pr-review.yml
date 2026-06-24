@@ -1,0 +1,91 @@
+name: PR Review
+
+on:
+  pull_request:
+    branches:
+      - '**'
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install flake8
+        run: pip install flake8
+
+      - name: Run flake8
+        run: flake8 . --max-line-length=120 --exclude=.git
+
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pandas numpy nltk
+
+      - name: Download NLTK data
+        run: python -c "import nltk; nltk.download('averaged_perceptron_tagger'); nltk.download('averaged_perceptron_tagger_eng')"
+
+      - name: Run tests
+        run: python -m pytest tests/ -v
+
+  close-pr-on-failure:
+    name: Comment and Close PR on Failure
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    if: ${{ always() && (needs.lint.result == 'failure' || needs.test.result == 'failure') }}
+    steps:
+      - name: Comment failure reason and close PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const failureReasons = [];
+            if (context.payload.pull_request == null) {
+              core.setFailed('No pull request context found.');
+              return;
+            }
+            if ('${{ needs.lint.result }}' === 'failure') {
+              failureReasons.push('- Lint job failed');
+            }
+            if ('${{ needs.test.result }}' === 'failure') {
+              failureReasons.push('- Test job failed');
+            }
+            const body = [
+              'コードレビューに失敗したため、このPRをクローズします。',
+              '',
+              '失敗理由:',
+              ...failureReasons,
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body,
+            });
+
+            await github.rest.pulls.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              state: 'closed',
+            });
