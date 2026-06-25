@@ -33,3 +33,25 @@ poisoned_df = textfooler.poison_dataframe(
     max_changed_words=2,
 )
 ```
+
+## CLIPScore summaries
+
+`clip_score_summary.py` converts paired CLIPScore result rows into chapter-ready
+delta tables and a short Markdown report for slide summaries. Input files can be
+CSV, TSV, JSON, or JSONL and should include a sample id, method label, prompt or
+caption, and CLIPScore column.
+
+Example:
+
+```bash
+python clip_score_summary.py results.tsv --output-prefix clip_results --original-label original
+```
+
+The command writes:
+
+- `clip_results_clip_delta_rows.csv`: one row per perturbed prompt paired with
+  its original prompt.
+- `clip_results_clip_summary.csv`: method-level count, mean delta, variance,
+  mean absolute delta, and representative sample ids.
+- `clip_results_clip_report.md`: a paper table candidate, one-slide summary
+  bullets, and representative examples.

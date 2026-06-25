@@ -26,7 +26,7 @@ jobs:
         run: pip install flake8
 
       - name: Run flake8
-        run: flake8 poisoning_baselines.py tests --max-line-length=120 --exclude=.git,__pycache__
+        run: flake8 poisoning_baselines.py clip_score_summary.py tests --max-line-length=120 --exclude=.git,__pycache__
 
   test:
     name: Run Tests
