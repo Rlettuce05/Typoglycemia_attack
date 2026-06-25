@@ -267,7 +267,8 @@ class Typoglycemia:
             import nltk
             return nltk.pos_tag(words)
         except (ImportError, LookupError):
-            return self._heuristic_pos_tag(words)
+            raise ImportError("NLTK is not installed or the required NLTK data is not downloaded. Please install NLTK and download the 'averaged_perceptron_tagger' data.")
+            #return self._heuristic_pos_tag(words)
 
     def _heuristic_pos_tag(self, words):
         return [(word, self._guess_pos_tag(word)) for word in words]
