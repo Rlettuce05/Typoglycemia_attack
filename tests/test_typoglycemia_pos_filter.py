@@ -7,13 +7,19 @@ from gen_poison_typoglycemia_mscoco_DF_choice import Typoglycemia
 
 def fixed_pos_tagger(words):
     tags = {
+        "the": "DT",
         "quick": "JJ",
         "artist": "NN",
         "paints": "VBZ",
         "bright": "JJ",
         "murals": "NNS",
+        ".": ".",
     }
-    return [(word, tags[word]) for word in words]
+    return [(word, tags[word.lower()]) for word in words]
+
+
+def fixed_tokenizer(text):
+    return text.replace(".", " .").split()
 
 
 class TypoglycemiaPosFilterTest(unittest.TestCase):
@@ -24,11 +30,32 @@ class TypoglycemiaPosFilterTest(unittest.TestCase):
                 "Caption": ["The quick artist paints bright murals."],
             }
         )
-        typoglycemia = Typoglycemia(seed=1, pos_tagger=fixed_pos_tagger)
+        events = []
+
+        def recording_tokenizer(text):
+            events.append(("tokenize", text))
+            return fixed_tokenizer(text)
+
+        def recording_pos_tagger(words):
+            events.append(("tag", list(words)))
+            return fixed_pos_tagger(words)
+
+        typoglycemia = Typoglycemia(
+            seed=1,
+            pos_tagger=recording_pos_tagger,
+            tokenizer=recording_tokenizer,
+        )
 
         typoglycemia.load_data_frame(df)
         typoglycemia.count_words_in_text(text_column="Caption")
 
+        self.assertEqual(
+            events,
+            [
+                ("tokenize", "The quick artist paints bright murals."),
+                ("tag", ["The", "quick", "artist", "paints", "bright", "murals", "."]),
+            ],
+        )
         self.assertEqual(
             set(typoglycemia.all_words_in_text_dict["word"]),
             {"artist", "paints", "murals"},
@@ -42,7 +69,11 @@ class TypoglycemiaPosFilterTest(unittest.TestCase):
                 "Caption": [original_caption],
             }
         )
-        typoglycemia = Typoglycemia(seed=1, pos_tagger=fixed_pos_tagger)
+        typoglycemia = Typoglycemia(
+            seed=1,
+            pos_tagger=fixed_pos_tagger,
+            tokenizer=fixed_tokenizer,
+        )
 
         typoglycemia.load_data_frame(df)
         typoglycemia.count_words_in_text(text_column="Caption")
@@ -62,7 +93,11 @@ class TypoglycemiaPosFilterTest(unittest.TestCase):
         self.assertTrue(poisoned_caption.endswith("."))
 
     def test_replacement_preserves_case_and_punctuation(self):
-        typoglycemia = Typoglycemia(seed=1, pos_tagger=fixed_pos_tagger)
+        typoglycemia = Typoglycemia(
+            seed=1,
+            pos_tagger=fixed_pos_tagger,
+            tokenizer=fixed_tokenizer,
+        )
 
         self.assertEqual(
             typoglycemia._replace_token_word("Murals.", "mualrs"),
