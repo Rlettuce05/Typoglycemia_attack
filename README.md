@@ -55,3 +55,29 @@ The command writes:
   mean absolute delta, and representative sample ids.
 - `clip_results_clip_report.md`: a paper table candidate, one-slide summary
   bullets, and representative examples.
+
+## Baseline comparison workflow
+
+`baseline_comparison.py` connects the Typoglycemia pipeline with the Charmer and
+TextFooler baselines on the same caption rows. It first writes one prompt table
+with `original`, `typoglycemia`, `charmer`, and `textfooler` rows plus changed
+word counts:
+
+```bash
+python baseline_comparison.py captions.tsv \
+  --output-prefix baseline_compare \
+  --text-column Caption \
+  --image-column "File Path"
+```
+
+After running CLIPScore on that prompt table and appending a `clip_score` column,
+rerun with `--scored-results` to create chapter-ready comparison outputs:
+
+```bash
+python baseline_comparison.py captions.tsv \
+  --output-prefix baseline_compare \
+  --scored-results scored_baseline_compare.csv
+```
+
+The scored run writes per-sample CLIPScore deltas, method-level summaries with
+mean changed words, and a Markdown report with representative examples.

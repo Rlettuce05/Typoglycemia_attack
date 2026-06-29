@@ -26,7 +26,10 @@ jobs:
         run: pip install flake8
 
       - name: Run flake8
-        run: flake8 poisoning_baselines.py clip_score_summary.py tests --max-line-length=120 --exclude=.git,__pycache__
+        run: >
+          flake8 poisoning_baselines.py clip_score_summary.py
+          baseline_comparison.py tests --max-line-length=120
+          --exclude=.git,__pycache__
 
   test:
     name: Run Tests
@@ -43,7 +46,10 @@ jobs:
         run: pip install pandas numpy nltk pytest
 
       - name: Download NLTK data
-        run: python -c "import nltk; nltk.download('averaged_perceptron_tagger'); nltk.download('averaged_perceptron_tagger_eng')"
+        run: >
+          python -c "import nltk;
+          nltk.download('averaged_perceptron_tagger');
+          nltk.download('averaged_perceptron_tagger_eng')"
 
       - name: Run tests
         run: python -m pytest tests/ -v
