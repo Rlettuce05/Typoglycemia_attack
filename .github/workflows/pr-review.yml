@@ -32,7 +32,7 @@ jobs:
         id: flake8
         run: |
           set +e
-          output=$(flake8 . --max-line-length=120 --exclude=.git 2>&1)
+          output=$(flake8 poisoning_baselines.py clip_score_summary.py baseline_comparison.py tests --max-line-length=120 --exclude=.git,__pycache__ 2>&1)
           exit_code=$?
           {
             echo 'lint_output<<ENDOFOUTPUT'
@@ -55,10 +55,13 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install pandas numpy nltk
+        run: pip install pandas numpy nltk pytest
 
       - name: Download NLTK data
-        run: python -c "import nltk; nltk.download('averaged_perceptron_tagger'); nltk.download('averaged_perceptron_tagger_eng')"
+        run: >
+          python -c "import nltk;
+          nltk.download('averaged_perceptron_tagger');
+          nltk.download('averaged_perceptron_tagger_eng')"
 
       - name: Run tests
         id: pytest

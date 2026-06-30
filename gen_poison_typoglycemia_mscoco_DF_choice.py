@@ -27,12 +27,13 @@ class Typoglycemia:
     '''
     add most efficient typoglycemia poisoning to texts in the dataframe.
     '''
-    def __init__(self, seed, pos_tagger=None, allowed_pos_prefixes=DEFAULT_ALLOWED_POS_PREFIXES):
+    def __init__(self, seed, pos_tagger=None, allowed_pos_prefixes=DEFAULT_ALLOWED_POS_PREFIXES, tokenizer=None):
         # dataframe to store all words in the text, their indices dictionary(text_index, index), DF(Document Frequency), shuffled_word for poisoning
         self.all_words_in_text_dict = pd.DataFrame(columns=["word", "text_index", "DF", "shuffled_word"])
         # pandas dataframe to store original texts and image paths
         self.data_frame = None
         self.allowed_pos_prefixes = tuple(allowed_pos_prefixes)
+        self.tokenizer = tokenizer or self._default_word_tokenize
         self.pos_tagger = pos_tagger or self._default_pos_tag
         # set random seed
         import random
@@ -216,25 +217,38 @@ class Typoglycemia:
         '''
         Return (token_index, normalized_word) for alphabetic nouns and verbs.
         '''
-        candidate_tokens = []
-        for index, token in enumerate(str(text).split()):
-            word = self._normalize_token(token)
-            if self._is_valid_word(word):
-                candidate_tokens.append((index, word))
-
-        if not candidate_tokens:
+        text = str(text)
+        sentence_tokens = list(self.tokenizer(text))
+        if not sentence_tokens:
             return []
 
-        tags = list(self.pos_tagger([word for _, word in candidate_tokens]))
-        if len(tags) != len(candidate_tokens):
-            raise ValueError("pos_tagger must return one tag for each input word")
+        tags = list(self.pos_tagger(sentence_tokens))
+        if len(tags) != len(sentence_tokens):
+            raise ValueError("pos_tagger must return one tag for each input token")
 
+        split_tokens = text.split()
+        split_index = 0
         allowed_tokens = []
-        for (index, word), tag_entry in zip(candidate_tokens, tags):
+        for token, tag_entry in zip(sentence_tokens, tags):
+            word = self._normalize_token(token)
+            if not self._is_valid_word(word):
+                continue
+
+            original_index = self._find_split_token_index(word, split_tokens, split_index)
+            if original_index is None:
+                continue
+            split_index = original_index + 1
+
             pos_tag = tag_entry[1] if isinstance(tag_entry, (tuple, list)) else tag_entry
             if self._is_allowed_pos(pos_tag):
-                allowed_tokens.append((index, word))
+                allowed_tokens.append((original_index, word))
         return allowed_tokens
+
+    def _find_split_token_index(self, word, split_tokens, start_index):
+        for index in range(start_index, len(split_tokens)):
+            if self._normalize_token(split_tokens[index]) == word:
+                return index
+        return None
 
     def _normalize_token(self, token):
         match = WORD_TOKEN_RE.match(token)
@@ -262,12 +276,20 @@ class Typoglycemia:
     def _is_allowed_pos(self, pos_tag):
         return any(pos_tag.startswith(prefix) for prefix in self.allowed_pos_prefixes)
 
+    def _default_word_tokenize(self, text):
+        try:
+            import nltk
+            return nltk.word_tokenize(text)
+        except (ImportError, LookupError):
+            raise ImportError("NLTK is not installed or the required NLTK data is not downloaded. Please install NLTK and download the 'punkt' and 'averaged_perceptron_tagger' data.")
+
     def _default_pos_tag(self, words):
         try:
             import nltk
             return nltk.pos_tag(words)
         except (ImportError, LookupError):
-            return self._heuristic_pos_tag(words)
+            raise ImportError("NLTK is not installed or the required NLTK data is not downloaded. Please install NLTK and download the 'averaged_perceptron_tagger' data.")
+            #return self._heuristic_pos_tag(words)
 
     def _heuristic_pos_tag(self, words):
         return [(word, self._guess_pos_tag(word)) for word in words]
