@@ -17,7 +17,7 @@ warnings.filterwarnings("ignore")
 This script generates poisoned text using typoglycemia phenomenon.
 '''
 
-DATA_PATH = "C:/Users/okamu/OneDrive/デスクトップ/LAB/研究/dataset/MScoco/train2017_512x512.csv"
+DATA_PATH = "/data1/share/Datasets/Other/MSCOCO_captioning/train2017_512x512.csv"
 BATCH_SIZE = 32
 DEFAULT_ALLOWED_POS_PREFIXES = ("NN", "VB")
 WORD_TOKEN_RE = re.compile(r"^([^A-Za-z]*)([A-Za-z]+)([^A-Za-z]*)$")
@@ -379,7 +379,7 @@ def parse_args():
     # arguments parse
     parser = argparse.ArgumentParser(description="Generate poisoned text using typoglycemia")
     parser.add_argument("--data_list", "-dl", type=str, default=DATA_PATH, help="Path to the file containing image and text list for poisoning")
-    parser.add_argument("--output_csv_folder", "-oc", type=str, default="C:\\Users\\okamu\\OneDrive\\デスクトップ\\LAB\\研究\\dataset\\MScoco\\poisoned", help="Path to save poisoned texts")
+    parser.add_argument("--output_csv_folder", "-oc", type=str, default="~/data/code/mscoco/poisoned", help="Path to save poisoned texts")
     return parser.parse_args()
 
 def load_data_df(data_list_path):
@@ -410,15 +410,15 @@ def main():
     # generate shuffled words for all words
     typoglycemia.gen_shuffled_word()
     # save all words with their DF scores
-    typoglycemia.save_all_words(file_path="C:/Users/okamu/OneDrive/デスクトップ/LAB/研究/dataset/MScoco/all_words_typoglycemia_flickr_random.tsv")
+    typoglycemia.save_all_words(file_path="~/data/code/all_words_typoglycemia_flickr_random.tsv")
 
     for i in range(20):
         # generate poisoned texts
         df_out = typoglycemia.gen_poisoned_text(max_changed_words=i+1, text_column='Caption', image_column='File Path')
 
         # save poisoned texts
-        df_out.to_csv(f"{args.output_csv_folder}\\poisoned_texts_{i}.tsv", index=False, sep='\t')
-        print(f"Poisoned texts saved to {args.output_csv_folder}\\poisoned_texts_{i}.tsv")
+        df_out.to_csv(f"{args.output_csv_folder}/poisoned_texts_{i}.tsv", index=False, sep='\t')
+        print(f"Poisoned texts saved to {args.output_csv_folder}/poisoned_texts_{i}.tsv")
 
 if __name__ == '__main__':
     main()
