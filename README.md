@@ -102,3 +102,22 @@ The JSONL output is token-level and includes the sample id, prompt, token id,
 token text, optional character offsets, special-token flag, and selected
 hidden-state vector. Use `--hidden-layer` to export a layer other than the final
 hidden state.
+
+## DF-Impact token matching
+
+`df_impact_matching.py` DP-aligns clean and poisoned token feature files produced
+by `df_impact_features.py`. It emits token-level `match`, `substitute`, `insert`,
+and `delete` rows with token ids, token indices, character offsets, and hidden
+state distances.
+
+Example:
+
+```bash
+python df_impact_matching.py clean_clip_hidden_states.jsonl poisoned_clip_hidden_states.jsonl \
+  --output-csv df_impact_token_alignment.csv \
+  --output-jsonl df_impact_token_alignment.jsonl
+```
+
+Matching is token-only by default. Use `--hidden-weight` to include hidden-state
+L2 distance in the DP pair cost, or `--allow-unpaired` to skip sample ids that are
+present in only one input file.
