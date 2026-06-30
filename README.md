@@ -81,3 +81,24 @@ python baseline_comparison.py captions.tsv \
 
 The scored run writes per-sample CLIPScore deltas, method-level summaries with
 mean changed words, and a Markdown report with representative examples.
+
+## DF-Impact CLIP token features
+
+`df_impact_features.py` extracts CLIP text-token IDs, character offsets, and
+hidden-state vectors for each prompt token. It keeps `transformers` and `torch`
+optional at import time, so the helper functions and tests can run without a
+downloaded model.
+
+Example:
+
+```bash
+python df_impact_features.py captions.tsv \
+  --text-column Caption \
+  --sample-id-column "File Path" \
+  --output-jsonl df_impact_clip_hidden_states.jsonl
+```
+
+The JSONL output is token-level and includes the sample id, prompt, token id,
+token text, optional character offsets, special-token flag, and selected
+hidden-state vector. Use `--hidden-layer` to export a layer other than the final
+hidden state.
