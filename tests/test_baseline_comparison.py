@@ -12,7 +12,7 @@ from baseline_comparison import (
     render_comparison_markdown_report,
     summarize_scored_comparison_rows,
 )
-from gen_poison_typoglycemia_mscoco_DF_choice import Typoglycemia
+from typoglycemia_pos_filter import Typoglycemia
 from poisoning_baselines import CharmerBaseline, TextFoolerBaseline
 
 

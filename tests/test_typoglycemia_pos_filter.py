@@ -2,7 +2,7 @@ import unittest
 
 import pandas as pd
 
-from gen_poison_typoglycemia_mscoco_DF_choice import Typoglycemia
+from typoglycemia_pos_filter import Typoglycemia
 
 
 def fixed_pos_tagger(words):

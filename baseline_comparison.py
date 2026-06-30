@@ -24,7 +24,7 @@ from clip_score_summary import (
     summarize_clip_delta_rows,
     write_delta_rows_csv,
 )
-from gen_poison_typoglycemia_mscoco_DF_choice import Typoglycemia
+from typoglycemia_pos_filter import Typoglycemia
 from poisoning_baselines import CharmerBaseline, TextFoolerBaseline
 
 
