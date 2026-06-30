@@ -9,11 +9,14 @@ permissions:
   contents: read
   pull-requests: write
   issues: write
+  actions: read
 
 jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    outputs:
+      lint_output: ${{ steps.flake8.outputs.lint_output }}
     steps:
       - uses: actions/checkout@v4
 
@@ -26,14 +29,23 @@ jobs:
         run: pip install flake8
 
       - name: Run flake8
-        run: >
-          flake8 poisoning_baselines.py clip_score_summary.py
-          baseline_comparison.py tests --max-line-length=120
-          --exclude=.git,__pycache__
+        id: flake8
+        run: |
+          set +e
+          output=$(flake8 poisoning_baselines.py clip_score_summary.py baseline_comparison.py tests --max-line-length=120 --exclude=.git,__pycache__ 2>&1)
+          exit_code=$?
+          {
+            echo 'lint_output<<ENDOFOUTPUT'
+            echo "$output"
+            echo 'ENDOFOUTPUT'
+          } >> "$GITHUB_OUTPUT"
+          exit $exit_code
 
   test:
     name: Run Tests
     runs-on: ubuntu-latest
+    outputs:
+      test_output: ${{ steps.pytest.outputs.test_output }}
     steps:
       - uses: actions/checkout@v4
 
@@ -52,7 +64,17 @@ jobs:
           nltk.download('averaged_perceptron_tagger_eng')"
 
       - name: Run tests
-        run: python -m pytest tests/ -v
+        id: pytest
+        run: |
+          set +e
+          output=$(python -m pytest tests/ -v 2>&1)
+          exit_code=$?
+          {
+            echo 'test_output<<ENDOFOUTPUT'
+            echo "$output"
+            echo 'ENDOFOUTPUT'
+          } >> "$GITHUB_OUTPUT"
+          exit $exit_code
 
   close-pr-on-failure:
     name: Comment and Close PR on Failure
@@ -64,22 +86,42 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const failureReasons = [];
             if (context.payload.pull_request == null) {
               core.setFailed('No pull request context found.');
               return;
             }
-            if ('${{ needs.lint.result }}' === 'failure') {
-              failureReasons.push('- Lint job failed');
+
+            const lintResult = '${{ needs.lint.result }}';
+            const testResult = '${{ needs.test.result }}';
+            const lintOutput = `${{ needs.lint.outputs.lint_output }}`.trim();
+            const testOutput = `${{ needs.test.outputs.test_output }}`.trim();
+
+            const sections = [];
+
+            if (lintResult === 'failure') {
+              sections.push([
+                '### ❌ Lint エラー',
+                lintOutput
+                  ? `\`\`\`\n${lintOutput}\n\`\`\``
+                  : '_出力を取得できませんでした_',
+              ].join('\n'));
             }
-            if ('${{ needs.test.result }}' === 'failure') {
-              failureReasons.push('- Test job failed');
+
+            if (testResult === 'failure') {
+              sections.push([
+                '### ❌ テスト エラー',
+                testOutput
+                  ? `\`\`\`\n${testOutput}\n\`\`\``
+                  : '_出力を取得できませんでした_',
+              ].join('\n'));
             }
+
             const body = [
-              'コードレビューに失敗したため、このPRをクローズします。',
+              '## ❌ コードレビューに失敗したため、このPRをクローズします。',
               '',
-              '失敗理由:',
-              ...failureReasons,
+              '---',
+              '',
+              ...sections,
             ].join('\n');
 
             await github.rest.issues.createComment({
