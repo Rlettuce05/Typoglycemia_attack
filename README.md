@@ -121,3 +121,26 @@ python df_impact_matching.py clean_clip_hidden_states.jsonl poisoned_clip_hidden
 Matching is token-only by default. Use `--hidden-weight` to include hidden-state
 L2 distance in the DP pair cost, or `--allow-unpaired` to skip sample ids that are
 present in only one input file.
+
+## DF-Impact word scoring
+
+`df_impact_scoring.py` aggregates token alignments into word-level impact rows and
+a DF-integrated word ranking. It reads the CSV/TSV/JSON/JSONL output from
+`df_impact_matching.py`; JSONL preserves prompt text and offsets, so it gives the
+most precise word grouping.
+
+Example:
+
+```bash
+python df_impact_scoring.py df_impact_token_alignment.jsonl \
+  --df-table all_words_typoglycemia.tsv \
+  --output-prefix df_impact_words
+```
+
+The command writes:
+
+- `df_impact_words_word_impact_rows.csv`: per-sample word impact rows.
+- `df_impact_words_word_impact_summary.csv`: corpus-level word ranking with
+  impact, DF, and DF-Impact scores.
+- `df_impact_words_df_impact_report.md`: a short top-word table for research
+  notes or slides.
