@@ -1,0 +1,11 @@
+# Agent workspace artifacts
+.agents/
+.codex/
+AGENTS.md
+docs/
+
+# Python cache artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
