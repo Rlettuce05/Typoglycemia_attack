@@ -56,6 +56,41 @@ The command writes:
 - `clip_results_clip_report.md`: a paper table candidate, one-slide summary
   bullets, and representative examples.
 
+## Poison-rate CLIPScore summaries
+
+`poison_rate_summary.py` aggregates paired CLIPScore rows by poisoning rate and
+changed-word count. It pairs perturbed rows with the original row for the same
+`sample_id` and split, then writes reviewable tables without rerunning image or
+text generation.
+
+Example:
+
+```bash
+python poison_rate_summary.py scored_baseline_compare.csv \
+  --output-prefix poison_rate_scores \
+  --dataset mscoco \
+  --split-column split \
+  --attack-setting typoglycemia \
+  --model clip-vit-base-patch32
+```
+
+If the input has no explicit `poison_rate` column, the script computes
+`poison_rate = changed_words / original_word_count`, using an explicit word-count
+column when present and otherwise the original prompt word count. Outputs are not
+overwritten unless `--overwrite` is passed.
+
+The command writes:
+
+- `poison_rate_scores_poison_rate_delta_rows.csv`: per-sample CLIPScore deltas
+  with split, changed words, and poisoning rate.
+- `poison_rate_scores_poison_rate_summary.csv`: mean CLIPScore deltas by split,
+  method, and poisoning rate.
+- `poison_rate_scores_changed_words_summary.csv`: mean CLIPScore deltas by split,
+  method, and changed-word count.
+- `poison_rate_scores_poison_rate_report.md` and
+  `poison_rate_scores_poison_rate_metadata.json`: a short report plus
+  reproducibility metadata.
+
 ## Baseline comparison workflow
 
 `baseline_comparison.py` connects the Typoglycemia pipeline with the Charmer and
