@@ -107,6 +107,43 @@ python baseline_comparison.py captions.tsv \
 スコア付き実行では、サンプルごとの CLIPScore 差分、平均変更単語数を含む手法ごとのサマリー、
 代表例を含む Markdown レポートを書き出します。
 
+## 長文キャプションデータセットビルダー
+
+`build_long_caption_dataset_llama.py` は、画像パスと元キャプションから長文キャプションの
+JSONL データセットを構築します。Llama Vision 系モデルでの利用を想定しており、
+元キャプションと生成された `long_caption` を分離したまま、単語数、タイポグリセミア
+変換可能単語数、CLIP トークン長、上限超過フラグ、dataset split、model、seed、config、
+timestamp、git commit を記録します。
+
+モデルを読み込まない配管確認の例:
+
+```bash
+python build_long_caption_dataset_llama.py captions.csv \
+  --output-jsonl long_captions.jsonl \
+  --dataset mscoco \
+  --split-column split \
+  --limit 100 \
+  --dry-run \
+  --skip-clip-tokenizer
+```
+
+モデル実行の例:
+
+```bash
+python build_long_caption_dataset_llama.py captions.csv \
+  --output-jsonl long_captions.jsonl \
+  --dataset mscoco \
+  --split-column split \
+  --model-id meta-llama/Llama-3.2-11B-Vision-Instruct \
+  --image-root /data/images \
+  --review-samples 20
+```
+
+既存の出力は `--overwrite` を渡さない限り上書きしません。`--resume` を使うと、
+既存 JSONL 内の `(sample_id, image_path, original_caption)` ペアをスキップして追記します。
+このスクリプトは行を暗黙に除外せず、hallucination、単語数範囲、CLIP overflow などの判断材料を
+quality flag として残します。
+
 ## DF-Impact CLIP トークン特徴量
 
 `df_impact_features.py` は、各プロンプトトークンについて CLIP のテキストトークン ID、
