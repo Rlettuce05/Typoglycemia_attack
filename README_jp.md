@@ -50,6 +50,35 @@ python clip_score_summary.py results.tsv --output-prefix clip_results --original
 - `clip_results_clip_summary.csv`: 手法ごとの件数、平均差分、分散、平均絶対差分、代表サンプル ID。
 - `clip_results_clip_report.md`: 論文用テーブルの候補、1 スライド要約の箇条書き、代表例。
 
+## 混入率別 CLIPScore サマリー
+
+`poison_rate_summary.py` は、対応する CLIPScore 行を混入率と変更単語数ごとに集計します。
+同じ `sample_id` と split の元行に摂動済み行を対応付け、画像生成やテキスト生成を再実行せずに
+レビュー可能な表を書き出します。
+
+例:
+
+```bash
+python poison_rate_summary.py scored_baseline_compare.csv \
+  --output-prefix poison_rate_scores \
+  --dataset mscoco \
+  --split-column split \
+  --attack-setting typoglycemia \
+  --model clip-vit-base-patch32
+```
+
+入力に明示的な `poison_rate` 列がない場合は、明示された単語数列があればそれを使い、
+なければ元プロンプトの単語数を分母として `poison_rate = changed_words / original_word_count`
+を計算します。既存の出力は `--overwrite` を渡さない限り上書きしません。
+
+このコマンドは以下を書き出します。
+
+- `poison_rate_scores_poison_rate_delta_rows.csv`: split、変更単語数、混入率を含むサンプルごとの CLIPScore 差分。
+- `poison_rate_scores_poison_rate_summary.csv`: split、手法、混入率ごとの平均 CLIPScore 差分。
+- `poison_rate_scores_changed_words_summary.csv`: split、手法、変更単語数ごとの平均 CLIPScore 差分。
+- `poison_rate_scores_poison_rate_report.md` と
+  `poison_rate_scores_poison_rate_metadata.json`: 短いレポートと再現性メタデータ。
+
 ## ベースライン比較ワークフロー
 
 `baseline_comparison.py` は、同じキャプション行に対して Typoglycemia パイプラインと
@@ -113,3 +142,24 @@ python df_impact_matching.py clean_clip_hidden_states.jsonl poisoned_clip_hidden
 デフォルトではトークンのみでマッチングします。DP のペアコストに隠れ状態の L2 距離を
 含めるには `--hidden-weight` を、片方の入力ファイルにしか存在しないサンプル ID を
 スキップするには `--allow-unpaired` を使用してください。
+
+## DF-Impact 単語スコアリング
+
+`df_impact_scoring.py` は、トークンアラインメントを単語レベルの impact 行と
+DF 統合単語ランキングに集計します。`df_impact_matching.py` の CSV、TSV、JSON、JSONL
+出力を読み込みます。JSONL はプロンプト本文とオフセットを保持するため、最も精密に単語を
+グループ化できます。
+
+例:
+
+```bash
+python df_impact_scoring.py df_impact_token_alignment.jsonl \
+  --df-table all_words_typoglycemia.tsv \
+  --output-prefix df_impact_words
+```
+
+このコマンドは以下を書き出します。
+
+- `df_impact_words_word_impact_rows.csv`: サンプルごとの単語 impact 行。
+- `df_impact_words_word_impact_summary.csv`: impact、DF、DF-Impact スコアを含むコーパス単位の単語ランキング。
+- `df_impact_words_df_impact_report.md`: 研究メモやスライド向けの短い上位単語表。
