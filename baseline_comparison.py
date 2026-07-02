@@ -24,7 +24,7 @@ from clip_score_summary import (
     summarize_clip_delta_rows,
     write_delta_rows_csv,
 )
-from typoglycemia_pos_filter import Typoglycemia
+from pos_filter import PosFilteredTypoglycemia
 from poisoning_baselines import CharmerBaseline, TextFoolerBaseline
 
 
@@ -112,7 +112,7 @@ def generate_attack_prompt_rows(
             )
         )
 
-    typoglycemia = typoglycemia_factory() if typoglycemia_factory else Typoglycemia(seed=42)
+    typoglycemia = typoglycemia_factory() if typoglycemia_factory else PosFilteredTypoglycemia(seed=42)
     typoglycemia.load_data_frame(data_frame)
     typoglycemia.count_words_in_text(text_column=text_column)
     typoglycemia.calculate_DF_scores()
@@ -370,7 +370,7 @@ def main(argv=None):
     parser.add_argument(
         "--use-heuristic-pos-tagger",
         action="store_true",
-        help="Use Typoglycemia's built-in conservative POS tagger instead of NLTK.",
+        help="Use PosFilteredTypoglycemia's built-in conservative POS tagger instead of NLTK.",
     )
     parser.add_argument(
         "--scored-results",
@@ -458,7 +458,7 @@ def _truncate(value, max_length=140):
 
 
 def _create_heuristic_typoglycemia():
-    typoglycemia = Typoglycemia(seed=42, tokenizer=_simple_tokenizer)
+    typoglycemia = PosFilteredTypoglycemia(seed=42, tokenizer=_simple_tokenizer)
     typoglycemia.pos_tagger = typoglycemia._heuristic_pos_tag
     return typoglycemia
 

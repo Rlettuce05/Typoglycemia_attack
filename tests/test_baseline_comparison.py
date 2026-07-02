@@ -12,7 +12,7 @@ from baseline_comparison import (
     render_comparison_markdown_report,
     summarize_scored_comparison_rows,
 )
-from typoglycemia_pos_filter import Typoglycemia
+from pos_filter import PosFilteredTypoglycemia
 from poisoning_baselines import CharmerBaseline, TextFoolerBaseline
 
 
@@ -127,7 +127,7 @@ class BaselineComparisonTest(unittest.TestCase):
             self.assertTrue(Path(f"{output_prefix}_clip_report.md").exists())
 
     def _typoglycemia_factory(self):
-        return Typoglycemia(
+        return PosFilteredTypoglycemia(
             seed=1,
             pos_tagger=fixed_pos_tagger,
             tokenizer=fixed_tokenizer,

@@ -2,7 +2,7 @@ import unittest
 
 import pandas as pd
 
-from typoglycemia_pos_filter import Typoglycemia
+from pos_filter import PosFilteredTypoglycemia
 
 
 def fixed_pos_tagger(words):
@@ -22,7 +22,7 @@ def fixed_tokenizer(text):
     return text.replace(".", " .").split()
 
 
-class TypoglycemiaPosFilterTest(unittest.TestCase):
+class PosFilterTest(unittest.TestCase):
     def test_count_words_keeps_only_nouns_and_verbs(self):
         df = pd.DataFrame(
             {
@@ -40,7 +40,7 @@ class TypoglycemiaPosFilterTest(unittest.TestCase):
             events.append(("tag", list(words)))
             return fixed_pos_tagger(words)
 
-        typoglycemia = Typoglycemia(
+        typoglycemia = PosFilteredTypoglycemia(
             seed=1,
             pos_tagger=recording_pos_tagger,
             tokenizer=recording_tokenizer,
@@ -69,7 +69,7 @@ class TypoglycemiaPosFilterTest(unittest.TestCase):
                 "Caption": [original_caption],
             }
         )
-        typoglycemia = Typoglycemia(
+        typoglycemia = PosFilteredTypoglycemia(
             seed=1,
             pos_tagger=fixed_pos_tagger,
             tokenizer=fixed_tokenizer,
@@ -93,7 +93,7 @@ class TypoglycemiaPosFilterTest(unittest.TestCase):
         self.assertTrue(poisoned_caption.endswith("."))
 
     def test_replacement_preserves_case_and_punctuation(self):
-        typoglycemia = Typoglycemia(
+        typoglycemia = PosFilteredTypoglycemia(
             seed=1,
             pos_tagger=fixed_pos_tagger,
             tokenizer=fixed_tokenizer,
