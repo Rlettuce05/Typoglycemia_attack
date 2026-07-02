@@ -6,7 +6,6 @@ from pathlib import Path
 
 from build_long_caption_dataset_llama import (
     BuilderContext,
-    DryRunCaptionGenerator,
     build_output_row,
     clean_generated_caption,
     count_typoglycemia_eligible_words,
