@@ -120,6 +120,44 @@ python baseline_comparison.py captions.tsv \
 The scored run writes per-sample CLIPScore deltas, method-level summaries with
 mean changed words, and a Markdown report with representative examples.
 
+## Long-caption dataset builder
+
+`build_long_caption_dataset_llama.py` builds a JSONL dataset of long captions
+from image paths and original captions. It is designed for Llama Vision models,
+keeps the original caption separate from the generated `long_caption`, and
+records word counts, Typoglycemia-eligible word counts, CLIP token length,
+overflow status, dataset split, model, seed, config, timestamp, and git commit.
+
+Example plumbing check without loading a model:
+
+```bash
+python build_long_caption_dataset_llama.py captions.csv \
+  --output-jsonl long_captions.jsonl \
+  --dataset mscoco \
+  --split-column split \
+  --limit 100 \
+  --dry-run \
+  --skip-clip-tokenizer
+```
+
+Example model run:
+
+```bash
+python build_long_caption_dataset_llama.py captions.csv \
+  --output-jsonl long_captions.jsonl \
+  --dataset mscoco \
+  --split-column split \
+  --model-id meta-llama/Llama-3.2-11B-Vision-Instruct \
+  --image-root /data/images \
+  --review-samples 20
+```
+
+Existing outputs are not overwritten unless `--overwrite` is passed. Use
+`--resume` to append and skip already processed `(sample_id, image_path,
+original_caption)` pairs. The script records quality flags instead of filtering
+rows, so decisions about hallucination, word-count range, and CLIP overflow stay
+visible for review.
+
 ## DF-Impact CLIP token features
 
 `df_impact_features.py` extracts CLIP text-token IDs, character offsets, and
