@@ -32,7 +32,7 @@ jobs:
         id: flake8
         run: |
           set +e
-          output=$(flake8 poisoning_baselines.py clip_score_summary.py baseline_comparison.py tests --max-line-length=120 --exclude=.git,__pycache__ 2>&1)
+          output=$(flake8 poisoning_baselines.py clip_score_summary.py baseline_comparison.py poison_rate_summary.py tests --max-line-length=120 --exclude=.git,__pycache__ 2>&1)
           exit_code=$?
           {
             echo 'lint_output<<ENDOFOUTPUT'
